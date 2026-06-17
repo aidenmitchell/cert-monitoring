@@ -13,6 +13,10 @@ services:
       - "127.0.0.1:9000:9000"   # native protocol
     volumes:
       - clickhouse-data:/var/lib/clickhouse
+      # To store the CT dataset on a specific host/NAS directory instead, comment
+      # the line above and uncomment + edit this (the ClickHouse image chowns it
+      # on startup, so no manual permission setup needed):
+      # - /mnt/nas/cert-monitoring/clickhouse:/var/lib/clickhouse
       - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
     ulimits:
       nofile:
@@ -47,6 +51,9 @@ services:
     volumes:
       - ./certstream/config.yaml:/app/config/config.yaml:ro
       - certstream-state:/app/state   # persisted recovery checkpoint
+      # Host/NAS path alternative for the checkpoint (must be writable by uid
+      # 10001 — the certstream container user — e.g. `chown -R 10001 <dir>`):
+      # - /mnt/nas/cert-monitoring/certstream-state:/app/state
 
   # Unified data plane: ingests the certstream lite stream into ClickHouse AND
   # detects/repairs index-sequence gaps by fetching missing entries directly
@@ -96,6 +103,9 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      # Host/NAS path alternative (must be writable by uid 472 — the grafana
+      # container user — e.g. `chown -R 472 <dir>`):
+      # - /mnt/nas/cert-monitoring/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
 
@@ -117,6 +127,13 @@ services:
     ports:
       - "127.0.0.1:8088:8088"
 
+# Docker-managed named volumes (default). To put data on a specific host/NAS
+# directory instead, use the commented bind-mount examples in each service above.
+#
+# NAS caveat: ClickHouse wants fast LOCAL disk. Running clickhouse-data over
+# NFS/SMB can hurt performance and, worse, break its file locking — keep the CT
+# dataset on a local SSD if you can, and use the NAS for backups/exports. The
+# small certstream-state and grafana-data volumes are fine on a NAS.
 volumes:
   clickhouse-data:
   certstream-state:
