@@ -49,6 +49,14 @@ Tables (`clickhouse/init/01-schema.sql`): `certs` (one row/cert, `ReplacingMerge
 `sha256`) → MV explodes into `domain_certs` (sorted by reversed domain) ; `cert_sightings`
 (raw non-deduped `(source_url, cert_index)` ledger — the gap-detection signal).
 
+## ClickHouse conventions
+
+Before changing `clickhouse/init/*.sql` or any query, follow
+[`.claude/rules/clickhouse.md`](.claude/rules/clickhouse.md) — condensed ClickHouse
+best practices (data types, ORDER BY/primary key, partitioning, insert strategy,
+materialized views, skip indices, and avoiding joins / mutations / `OPTIMIZE FINAL`),
+each noting how this repo applies it.
+
 ## Critical invariants — easy to break
 
 - **Schema contract lives in THREE places that must stay in sync**: the column list/order in
