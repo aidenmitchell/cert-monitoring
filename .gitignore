@@ -1,0 +1,11 @@
+# Local secrets / config — keep .env.example tracked, not .env
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store

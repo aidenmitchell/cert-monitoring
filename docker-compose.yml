@@ -1,0 +1,54 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    restart: always
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ct}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+      # Required when a password is set, otherwise the default user is open.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "127.0.0.1:8123:8123"   # HTTP interface
+      - "127.0.0.1:9000:9000"   # native protocol
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  certstream:
+    image: 0rickyy0/certstream-server-go:latest
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"   # WebSocket lite stream at /
+    volumes:
+      - ./certstream/config.yaml:/app/config/config.yaml:ro
+
+  ingester:
+    build: ./ingester
+    restart: always
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      certstream:
+        condition: service_started
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ct}
+      CERTSTREAM_WS_URL: ws://certstream:8080/
+      BATCH_SIZE: "5000"
+      BATCH_SECONDS: "2"
+
+volumes:
+  clickhouse-data:

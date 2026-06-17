@@ -1,0 +1,36 @@
+webserver:
+  listen_addr: "0.0.0.0"
+  listen_port: 8080
+  real_ip: false
+  full_url: "/full-stream"
+  lite_url: "/"
+  domains_only_url: "/domains-only"
+  cert_path: ""
+  cert_key_path: ""
+  compression_enabled: false
+
+prometheus:
+  enabled: false
+  listen_addr: "0.0.0.0"
+  listen_port: 8080
+  metrics_url: "/metrics"
+  expose_system_metrics: false
+  real_ip: false
+  whitelist:
+    - "127.0.0.1/8"
+
+general:
+  # Follow the default CT logs from Google's Chrome log list.
+  disable_default_logs: false
+  drop_old_logs: true
+
+  buffer_sizes:
+    websocket: 300
+    ctlog: 1000
+    # Central broadcast queue — raise if the ingester can't keep up.
+    broadcastmanager: 10000
+
+  # Backfill is out of scope for now; start from the live tip on each restart.
+  recovery:
+    enabled: false
+    ct_index_file: "/app/config/ct_index.json"
