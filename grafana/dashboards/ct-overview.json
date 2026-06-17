@@ -4,7 +4,7 @@
   "tags": ["ct", "cert-monitoring"],
   "timezone": "utc",
   "schemaVersion": 39,
-  "version": 5,
+  "version": 6,
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "panels": [
@@ -119,18 +119,18 @@
     {
       "id": 7,
       "type": "barchart",
-      "title": "Certificate validity length (leaf certs, selected range)",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 23 },
+      "title": "Certificate validity length by issuer (days with >100 certs, selected range)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 23 },
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
-      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
-      "options": { "xField": "validity", "showValue": "auto", "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "palette-classic" }, "custom": { "stacking": { "mode": "normal", "group": "A" }, "fillOpacity": 90, "lineWidth": 0 } }, "overrides": [] },
+      "options": { "xField": "validity", "showValue": "never", "stacking": "normal", "legend": { "showLegend": true, "placement": "right", "displayMode": "list" }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
         {
           "refId": "A",
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
           "editorType": "sql",
           "queryType": "table",
-          "rawSql": "SELECT multiIf(d<=10,'<=10d', d<=47,'11-47d', d<=90,'48-90d', d<=180,'91-180d', d<=397,'181-397d','398d+') AS validity, count() AS certs FROM (SELECT dateDiff('day', not_before, not_after) AS d FROM ct.certs WHERE is_ca = 0 AND $__timeFilter(seen)) GROUP BY validity ORDER BY min(d)"
+          "rawSql": "SELECT toString(validity_days) AS validity, sumIf(c, issuer = 'Let''s Encrypt') AS \"Let's Encrypt\", sumIf(c, issuer = 'Google Trust Services') AS \"Google Trust Services\", sumIf(c, issuer = 'ZeroSSL GmbH') AS \"ZeroSSL\", sumIf(c, issuer = 'Amazon') AS \"Amazon\", sumIf(c, issuer = 'GoDaddy.com') AS \"GoDaddy\", sumIf(c, issuer = 'DigiCert Inc') AS \"DigiCert\", sumIf(c, issuer = 'Microsoft Corporation') AS \"Microsoft\", sumIf(c, issuer = 'Sectigo Limited') AS \"Sectigo\", sumIf(c, issuer NOT IN ('Let''s Encrypt','Google Trust Services','ZeroSSL GmbH','Amazon','GoDaddy.com','DigiCert Inc','Microsoft Corporation','Sectigo Limited')) AS \"Other\" FROM (SELECT dateDiff('day', not_before, not_after) AS validity_days, issuer_o AS issuer, count() AS c FROM ct.certs WHERE is_ca = 0 AND $__timeFilter(seen) GROUP BY validity_days, issuer) GROUP BY validity_days HAVING sum(c) > 100 ORDER BY validity_days"
         }
       ]
     }
