@@ -52,6 +52,7 @@ func main() {
 		w.Write(indexHTML)
 	})
 	http.HandleFunc("/api/lookup", lookupHandler)
+	http.HandleFunc("/api/coverage", coverageHandler)
 
 	addr := env("LISTEN_ADDR", ":8088")
 	log.Printf("webui listening on %s", addr)
@@ -111,6 +112,18 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(v)
+}
+
+// coverageHandler reports how far back the stored data goes (min/max seen).
+func coverageHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	var oldest, newest time.Time
+	if err := conn.QueryRow(ctx, "SELECT min(seen), max(seen) FROM certs").Scan(&oldest, &newest); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "query failed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"oldest": oldest.Unix(), "newest": newest.Unix()})
 }
 
 func lookupHandler(w http.ResponseWriter, r *http.Request) {

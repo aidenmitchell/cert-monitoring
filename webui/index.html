@@ -162,7 +162,7 @@
     </div>
   </section>
 
-  <footer>Data from the live Certificate Transparency feed. Dashboards in <code>Grafana :3000</code>; raw SQL at <code>:8123/play</code>.</footer>
+  <footer id="coverage">Live Certificate Transparency feed.</footer>
 </div>
 
 <script>
@@ -237,9 +237,17 @@ async function lookup(e){
   }).join('');
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function span(secs){ const d=Math.floor(secs/86400),h=Math.floor(secs%86400/3600),m=Math.floor(secs%3600/60);
+  return d>0 ? d+'d '+h+'h' : h>0 ? h+'h '+m+'m' : m+'m'; }
+
 $('#f').addEventListener('submit', lookup);
 $('#sub').addEventListener('change', ()=>{ if(!$('#out').hidden) lookup(); });
 $('#domain').focus();
+
+fetch('/api/coverage').then(r=>r.json()).then(c=>{
+  if(c.oldest>0) $('#coverage').textContent =
+    'Live Certificate Transparency feed · data goes back to '+fmtWhen(c.oldest)+' — '+span(c.newest-c.oldest)+' of history.';
+}).catch(()=>{});
 </script>
 </body>
 </html>
