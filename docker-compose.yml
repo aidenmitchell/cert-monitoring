@@ -24,11 +24,15 @@ services:
       timeout: 3s
       retries: 12
 
-  # One-shot: seed ct_index.json at each log's current tip so certstream's
-  # recovery resumes from "now" instead of backfilling from index 0. Idempotent
-  # — skips if the index file already exists.
+  # One-shot: `ctmon seed` writes ct_index.json at each log's current tip so
+  # certstream's recovery resumes from "now" instead of backfilling from index 0.
+  # Idempotent — only fills logs missing from the file.
   seed:
-    build: ./seed
+    build: ./ctmon
+    image: ctmon:latest
+    command: ["seed"]
+    environment:
+      CT_INDEX_FILE: /state/ct_index.json
     volumes:
       - certstream-state:/state
 
@@ -44,8 +48,12 @@ services:
       - ./certstream/config.yaml:/app/config/config.yaml:ro
       - certstream-state:/app/state   # persisted recovery checkpoint
 
-  ingester:
-    build: ./ingester
+  # Unified data plane: ingests the certstream lite stream into ClickHouse AND
+  # detects/repairs index-sequence gaps by fetching missing entries directly
+  # from each CT log (RFC6962 + tiled). Runs both concurrently.
+  monitor:
+    build: ./ctmon
+    image: ctmon:latest
     restart: always
     depends_on:
       clickhouse:
@@ -54,31 +62,19 @@ services:
         condition: service_started
     environment:
       CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: "8123"
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ct}
-      CERTSTREAM_WS_URL: ws://certstream:8080/
-      BATCH_SIZE: "5000"
-      BATCH_SECONDS: "2"
-
-  # Detects gaps in the stored index sequence (cert_sightings) and repairs them
-  # by fetching the missing entries directly from each CT log. Runs on start and
-  # every BACKFILL_INTERVAL; gaps larger than MAX_GAP are logged for review.
-  backfiller:
-    build: ./backfiller
-    restart: always
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-    environment:
-      CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_PORT: "9000"          # native protocol
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ct}
-      BACKFILL_INTERVAL: "1h"
+      CERTSTREAM_WS_URL: ws://certstream:8080/
+      # ClickHouse insert guidance: 10k-100k rows per insert, batched client-side.
+      BATCH_SIZE: "50000"              # flush at this many rows...
+      BATCH_SECONDS: "5"               # ...or this interval, whichever first
+      MAX_BUFFER: "500000"             # retry buffer cap before dropping oldest
+      BACKFILL_INTERVAL: "2m"          # detect+repair cadence (cheap; tune to taste)
       MAX_GAP: "100000"                # per-log gap cap; larger gaps logged, skipped
+      BACKFILL_CONCURRENCY: "6"        # logs repaired in parallel
+      BACKFILL_RETRIES: "6"            # per-fetch retries (429/transient) w/ jittered backoff + Retry-After
 
 volumes:
   clickhouse-data:

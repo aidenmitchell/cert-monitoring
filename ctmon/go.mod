@@ -1,9 +1,10 @@
-module backfiller
+module ctmon
 
 go 1.25
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.46.0
+	github.com/coder/websocket v1.8.14
 	github.com/google/certificate-transparency-go v1.3.3
 	golang.org/x/crypto v0.48.0
 )

@@ -25,10 +25,13 @@ general:
   drop_old_logs: true
 
   buffer_sizes:
-    websocket: 300
+    # Per-client send buffer — headroom so a brief consumer hiccup doesn't cause
+    # certstream to drop messages (the ingester decouples reads from inserts, so
+    # this is defense-in-depth).
+    websocket: 4000
     ctlog: 1000
-    # Central broadcast queue — raise if the ingester can't keep up.
-    broadcastmanager: 10000
+    # Central broadcast queue.
+    broadcastmanager: 20000
 
   # Resume from the last processed index per log after a restart, filling the
   # downtime gap. The `seed` service writes ct_index.json at each log's current
