@@ -5,11 +5,14 @@ you can **query certificates by domain** — exact (`mail.example.com`) and
 subdomain/suffix (everything under `example.com`).
 
 ```
+seed (one-shot) ─▶ ct_index.json
+                       │
 certstream-server-go ──ws(/lite)──▶ ingester (Python) ──batch INSERT──▶ ClickHouse
                                                                         certs ──MV──▶ domain_certs
 ```
 
-- **certstream-server-go** — streams parsed CT entries over WebSocket (lite stream, metadata only).
+- **seed** — one-shot job that writes each CT log's current tip to `ct_index.json` so certstream's recovery resumes from "now" instead of backfilling from 0. Idempotent; runs before certstream.
+- **certstream-server-go** — streams parsed CT entries over WebSocket (lite stream, metadata only); `recovery` enabled so it resumes after a restart.
 - **ingester** — Python (`websockets` + `clickhouse-connect`); parses each update, batches, inserts into `ct.certs`.
 - **ClickHouse** — `ct.certs` (one row per cert) + `ct.domain_certs` (one row per domain, populated by a materialized view).
 
@@ -80,5 +83,14 @@ ClickHouse HTTP (`8123`) and native (`9000`) ports are bound to `127.0.0.1` only
   Text/array columns use `ZSTD(1)`, timestamps use `Delta, ZSTD(1)`.
 - **Dedup**: a cert is logged to multiple CT logs. `ReplacingMergeTree` collapses
   duplicates by `sha256` (eventual) — use `FINAL` or `uniqExact(sha256)` for exact counts.
-- **Backfill** of historical logs is out of scope; the stack ingests from the live tip.
+- **Recovery / gap-filling**: certstream checkpoints each log's index to a persisted
+  volume (`certstream-state`) every 30s and on shutdown, and resumes from there after a
+  restart — filling the downtime gap (duplicates dedup by `sha256`). The one-shot `seed`
+  service writes the file at each log's current tip first, so a fresh deploy resumes from
+  "now" rather than backfilling the entire history. The seeder is idempotent and
+  self-healing: it only fetches tips for logs missing from the file. **Any watched log not
+  in the seed backfills from index 0** — re-run `docker compose run --rm seed` if logs are
+  added. To force a tip reset, wipe the file first:
+  `docker compose run --rm --entrypoint sh seed -c 'rm -f /state/ct_index.json* && python /app/seed_ct_index.py'`.
+- **Backfill** of full historical logs is out of scope; the stack ingests from the live tip.
 - **Retention**: add `TTL seen + INTERVAL N MONTH` to the tables if storage is bounded.

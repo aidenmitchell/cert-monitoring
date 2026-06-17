@@ -30,7 +30,9 @@ general:
     # Central broadcast queue — raise if the ingester can't keep up.
     broadcastmanager: 10000
 
-  # Backfill is out of scope for now; start from the live tip on each restart.
+  # Resume from the last processed index per log after a restart, filling the
+  # downtime gap. The `seed` service writes ct_index.json at each log's current
+  # tip on first start, so enabling this does NOT trigger a full backfill.
   recovery:
-    enabled: false
-    ct_index_file: "/app/config/ct_index.json"
+    enabled: true
+    ct_index_file: "/app/state/ct_index.json"

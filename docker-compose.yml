@@ -24,13 +24,25 @@ services:
       timeout: 3s
       retries: 12
 
+  # One-shot: seed ct_index.json at each log's current tip so certstream's
+  # recovery resumes from "now" instead of backfilling from index 0. Idempotent
+  # — skips if the index file already exists.
+  seed:
+    build: ./seed
+    volumes:
+      - certstream-state:/state
+
   certstream:
     image: 0rickyy0/certstream-server-go:latest
     restart: always
+    depends_on:
+      seed:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"   # WebSocket lite stream at /
     volumes:
       - ./certstream/config.yaml:/app/config/config.yaml:ro
+      - certstream-state:/app/state   # persisted recovery checkpoint
 
   ingester:
     build: ./ingester
@@ -52,3 +64,4 @@ services:
 
 volumes:
   clickhouse-data:
+  certstream-state:
