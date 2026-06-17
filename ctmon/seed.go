@@ -119,7 +119,18 @@ func collectTargets(ll *logList) []seedTarget {
 			url := lg.MonitoringURL
 			targets = append(targets, seedTarget{
 				key: normalizeURL(url), desc: lg.Description,
-				fetch: func(ctx context.Context) (uint64, error) { return fetchCheckpointSize(ctx, url) },
+				fetch: func(ctx context.Context) (uint64, error) {
+					var s uint64
+					err := withRetry(ctx, 5, "checkpoint "+url, func() error {
+						v, e := fetchCheckpointSize(ctx, url)
+						if e != nil {
+							return e
+						}
+						s = v
+						return nil
+					})
+					return s, err
+				},
 			})
 		}
 	}

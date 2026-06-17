@@ -253,8 +253,15 @@ func fetchRFC6962(ctx context.Context, cfg config, g Gap, sourceName string) ([]
 
 func fetchTiled(ctx context.Context, cfg config, g Gap, sourceName string) ([]certRow, error) {
 	base := strings.TrimRight(g.SourceURL, "/")
-	size, err := fetchCheckpointSize(ctx, base)
-	if err != nil {
+	var size uint64
+	if err := withRetry(ctx, cfg.backfillRetries, "checkpoint "+g.SourceURL, func() error {
+		s, e := fetchCheckpointSize(ctx, base)
+		if e != nil {
+			return e
+		}
+		size = s
+		return nil
+	}); err != nil {
 		return nil, fmt.Errorf("checkpoint: %w", err)
 	}
 	// Tiles below size/tileSize are complete and immutable; the one at

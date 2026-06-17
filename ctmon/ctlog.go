@@ -80,9 +80,13 @@ func httpGet(ctx context.Context, url string) ([]byte, int, time.Duration, error
 }
 
 func fetchCheckpointSize(ctx context.Context, base string) (uint64, error) {
-	data, status, _, err := httpGet(ctx, strings.TrimRight(base, "/")+"/checkpoint")
-	if err != nil || status != http.StatusOK {
-		return 0, fmt.Errorf("checkpoint status %d err %v", status, err)
+	data, status, ra, err := httpGet(ctx, strings.TrimRight(base, "/")+"/checkpoint")
+	if err != nil {
+		return 0, err
+	}
+	if status != http.StatusOK {
+		// fetchErr so callers' retry honors Retry-After / 429 and fails fast on 4xx.
+		return 0, &fetchErr{status: status, retryAfter: ra}
 	}
 	lines := strings.Split(string(data), "\n")
 	if len(lines) < 2 {
