@@ -4,7 +4,7 @@
   "tags": ["ct", "cert-monitoring"],
   "timezone": "utc",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "panels": [
@@ -113,6 +113,24 @@
           "editorType": "sql",
           "queryType": "table",
           "rawSql": "SELECT issuer_o AS issuer, count() AS certs FROM ct.certs WHERE issuer_o != '' AND $__timeFilter(seen) GROUP BY issuer ORDER BY certs DESC LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "Certificate validity length (leaf certs, selected range)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 23 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "xField": "validity", "showValue": "auto", "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "table",
+          "rawSql": "SELECT multiIf(d<=10,'<=10d', d<=47,'11-47d', d<=90,'48-90d', d<=180,'91-180d', d<=397,'181-397d','398d+') AS validity, count() AS certs FROM (SELECT dateDiff('day', not_before, not_after) AS d FROM ct.certs WHERE is_ca = 0 AND $__timeFilter(seen)) GROUP BY validity ORDER BY min(d)"
         }
       ]
     }
