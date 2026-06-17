@@ -29,13 +29,19 @@ CH_DB = os.environ.get("CLICKHOUSE_DB", "ct")
 WS_URL = os.environ.get("CERTSTREAM_WS_URL", "ws://certstream:8080/")
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "5000"))
 BATCH_SECONDS = float(os.environ.get("BATCH_SECONDS", "2"))
+# Cap the retry buffer so a long ClickHouse outage can't OOM us. If exceeded,
+# the oldest rows are dropped with a loud error — which gap detection will then
+# flag and backfill can repair.
+MAX_BUFFER = int(os.environ.get("MAX_BUFFER", "500000"))
 
-# Column order must match the row tuples appended in _row().
-COLUMNS = [
+# Column order must match the cert tuple built in _rows().
+CERT_COLUMNS = [
     "sha256", "seen", "not_before", "not_after", "all_domains", "subject_cn",
     "subject_o", "issuer_cn", "issuer_o", "signature_algorithm", "is_ca",
     "update_type", "source_name", "source_url", "source_type", "cert_index",
 ]
+# Raw index ledger for gap detection (one row per log sighting, not deduped).
+SIGHTING_COLUMNS = ["source_url", "source_type", "cert_index", "seen"]
 
 
 def _dt(epoch_seconds) -> datetime:
@@ -58,14 +64,19 @@ def _hash_bytes(hexstr, n: int) -> bytes:
     return b[:n].ljust(n, b"\x00")
 
 
-def _row(data: dict) -> tuple:
+def _rows(data: dict) -> tuple[tuple, tuple]:
+    """Build (cert_row, sighting_row) from one certificate_update."""
     leaf = data.get("leaf_cert", {}) or {}
     subject = leaf.get("subject", {}) or {}
     issuer = leaf.get("issuer", {}) or {}
     source = data.get("source", {}) or {}
-    return (
+    seen = _dt(data.get("seen"))
+    source_url = _s(source.get("url"))
+    source_type = _s(source.get("type"))
+    cert_index = int(data.get("cert_index") or 0)
+    cert_row = (
         _hash_bytes(leaf.get("sha256"), 32),
-        _dt(data.get("seen")),
+        seen,
         _dt(leaf.get("not_before")),
         _dt(leaf.get("not_after")),
         list(leaf.get("all_domains") or []),
@@ -77,10 +88,12 @@ def _row(data: dict) -> tuple:
         1 if leaf.get("is_ca") else 0,
         _s(data.get("update_type")),
         _s(source.get("name")),
-        _s(source.get("url")),
-        _s(source.get("type")),
-        int(data.get("cert_index") or 0),
+        source_url,
+        source_type,
+        cert_index,
     )
+    sighting_row = (source_url, source_type, cert_index, seen)
+    return cert_row, sighting_row
 
 
 def connect_clickhouse():
@@ -95,13 +108,15 @@ class Batcher:
 
     def __init__(self, client):
         self.client = client
-        self.rows: list[tuple] = []
+        self.certs: list[tuple] = []
+        self.sightings: list[tuple] = []
         self.lock = asyncio.Lock()
 
-    async def add(self, row: tuple):
+    async def add(self, cert_row: tuple, sighting_row: tuple):
         async with self.lock:
-            self.rows.append(row)
-            if len(self.rows) >= BATCH_SIZE:
+            self.certs.append(cert_row)
+            self.sightings.append(sighting_row)
+            if len(self.certs) >= BATCH_SIZE:
                 await self._flush_locked()
 
     async def flush(self):
@@ -109,14 +124,32 @@ class Batcher:
             await self._flush_locked()
 
     async def _flush_locked(self):
-        if not self.rows:
+        if not self.certs:
             return
-        batch, self.rows = self.rows, []
-        # clickhouse-connect is synchronous; keep the event loop free.
-        await asyncio.to_thread(
-            self.client.insert, "certs", batch, column_names=COLUMNS,
-        )
-        log.info("inserted %d rows", len(batch))
+        try:
+            # clickhouse-connect is synchronous; keep the event loop free.
+            await asyncio.to_thread(self._insert, self.certs, self.sightings)
+        except Exception as exc:
+            # Keep the buffer and retry on the next flush instead of dropping —
+            # this is what makes a ClickHouse restart a delay, not data loss.
+            log.warning("insert failed (%s); buffered %d rows for retry",
+                        exc, len(self.certs))
+            if len(self.certs) > MAX_BUFFER:
+                drop = len(self.certs) - MAX_BUFFER
+                del self.certs[:drop]
+                del self.sightings[:drop]
+                log.error("buffer exceeded %d rows; dropped %d oldest "
+                          "(gap detection will flag this)", MAX_BUFFER, drop)
+            return
+        n = len(self.certs)
+        self.certs, self.sightings = [], []
+        log.info("inserted %d rows", n)
+
+    def _insert(self, certs: list[tuple], sightings: list[tuple]):
+        # Ledger first: if certs then fails and we retry, re-inserting ledger
+        # rows is harmless (ReplacingMergeTree dedups by source_url+cert_index).
+        self.client.insert("cert_sightings", sightings, column_names=SIGHTING_COLUMNS)
+        self.client.insert("certs", certs, column_names=CERT_COLUMNS)
 
 
 async def _timed_flush(batcher: Batcher, stop: asyncio.Event):
@@ -125,7 +158,10 @@ async def _timed_flush(batcher: Batcher, stop: asyncio.Event):
             await asyncio.wait_for(stop.wait(), timeout=BATCH_SECONDS)
         except asyncio.TimeoutError:
             pass
-        await batcher.flush()
+        try:
+            await batcher.flush()       # never let the flusher task die
+        except Exception as exc:
+            log.error("flusher error: %s", exc)
 
 
 async def run():
@@ -157,7 +193,8 @@ async def run():
                             continue
                         data = payload.get("data")
                         if data:
-                            await batcher.add(_row(data))
+                            cert_row, sighting_row = _rows(data)
+                            await batcher.add(cert_row, sighting_row)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # reconnect on any ws/network error

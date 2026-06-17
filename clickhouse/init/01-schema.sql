@@ -67,6 +67,24 @@ PARTITION BY toYYYYMM(seen)
 ORDER BY (reversed_domain, seen, sha256);
 
 -- ---------------------------------------------------------------------------
+-- Table 3: raw per-(log, index) ledger for gap detection. NOT deduped across
+-- logs (each log has its own index sequence), so unlike ct.certs it preserves
+-- per-log index continuity. The ingester writes here directly. A gap = a jump
+-- in cert_index within a source_url. source_type/source_url let the backfiller
+-- pick the fetch protocol + endpoint.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ct.cert_sightings
+(
+    source_url   LowCardinality(String),
+    source_type  LowCardinality(String),   -- rfc6962 | tiled
+    cert_index   UInt64,
+    seen         DateTime64(3)             CODEC(Delta, ZSTD(1))
+)
+ENGINE = ReplacingMergeTree
+PARTITION BY toYYYYMM(seen)
+ORDER BY (source_url, cert_index);
+
+-- ---------------------------------------------------------------------------
 -- Materialized View: explode all_domains into domain_certs on insert.
 -- The ingester writes ONLY to ct.certs; this fans out automatically.
 -- ---------------------------------------------------------------------------
