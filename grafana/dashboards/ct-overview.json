@@ -4,7 +4,7 @@
   "tags": ["ct", "cert-monitoring"],
   "timezone": "utc",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "panels": [
@@ -14,8 +14,8 @@
       "title": "Unique certificates (all time)",
       "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
-      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "thresholds" } }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
       "targets": [
         {
           "refId": "A",
@@ -32,8 +32,8 @@
       "title": "Unique domains (all time)",
       "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
-      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0, "color": { "mode": "thresholds" } }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "locale", "decimals": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
       "targets": [
         {
           "refId": "A",
