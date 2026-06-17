@@ -127,7 +127,7 @@ ClickHouse HTTP (`8123`) and native (`9000`) ports are bound to `127.0.0.1` only
   self-healing: it only fetches tips for logs missing from the file. **Any watched log not
   in the seed backfills from index 0** — re-run `docker compose run --rm seed` if logs are
   added. To force a tip reset, wipe the file first:
-  `docker compose run --rm --entrypoint sh seed -c 'rm -f /state/ct_index.json* && python /app/seed_ct_index.py'`.
+  `docker compose run --rm --entrypoint sh seed -c 'rm -f /state/ct_index.json* && /ctmon seed'`.
 - **Backfill** is targeted gap-repair only (refilling holes in otherwise-streamed ranges).
   Bulk historical backfill from index 0 is still out of scope; the stack ingests from the
   live tip and repairs gaps within what it has seen.
