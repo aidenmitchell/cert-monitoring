@@ -180,6 +180,9 @@ func seedGet(ctx context.Context, url string) ([]byte, int, error) {
 			}
 			time.Sleep(wait)
 		case err != nil:
+			if nonRetryable(err) {
+				return nil, 0, err // e.g. DNS NXDOMAIN — don't retry retired/bogus logs
+			}
 			lastErr = err
 			time.Sleep(backoffDur(attempt))
 		default:

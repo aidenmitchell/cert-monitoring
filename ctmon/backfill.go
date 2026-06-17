@@ -139,11 +139,11 @@ func withRetry(ctx context.Context, attempts int, what string, fn func() error) 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		var fe *fetchErr
-		if errors.As(err, &fe) && !retryableStatus(fe.status) {
-			return err // hard error (4xx) — retrying won't help
+		if nonRetryable(err) {
+			return err // hard HTTP status (4xx) or DNS NXDOMAIN — retrying won't help
 		}
 		wait := backoffDur(a)
+		var fe *fetchErr
 		if errors.As(err, &fe) && fe.retryAfter > 0 {
 			wait = fe.retryAfter // honor the log's Retry-After
 		}

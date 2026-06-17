@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,6 +42,20 @@ func (e *fetchErr) Error() string { return fmt.Sprintf("HTTP %d", e.status) }
 // retryableStatus: transient statuses worth retrying. 4xx (other than 408/429)
 // are hard errors — retrying just hammers the log.
 func retryableStatus(s int) bool { return s == 408 || s == 429 || s >= 500 }
+
+// nonRetryable reports errors that won't succeed on retry: hard HTTP statuses
+// (4xx except 408/429) and DNS NXDOMAIN ("no such host", e.g. retired/bogus logs).
+func nonRetryable(err error) bool {
+	var fe *fetchErr
+	if errors.As(err, &fe) {
+		return !retryableStatus(fe.status)
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsNotFound
+	}
+	return false
+}
 
 // parseRetryAfter handles both forms of the Retry-After header: delta-seconds
 // and an HTTP-date.
