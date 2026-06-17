@@ -76,6 +76,30 @@ services:
       BACKFILL_CONCURRENCY: "6"        # logs repaired in parallel
       BACKFILL_RETRIES: "6"            # per-fetch retries (429/transient) w/ jittered backoff + Retry-After
 
+  # Web UI: Grafana with the official ClickHouse datasource + a starter dashboard,
+  # both auto-provisioned. Open http://localhost:3000 (anonymous view enabled;
+  # log in as admin / CLICKHOUSE_PASSWORD to edit).
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+
 volumes:
   clickhouse-data:
   certstream-state:
+  grafana-data:

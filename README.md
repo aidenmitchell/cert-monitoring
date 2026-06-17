@@ -49,6 +49,16 @@ docker compose exec clickhouse clickhouse-client --password "$CLICKHOUSE_PASSWOR
 docker compose logs -f monitor
 ```
 
+## Web UI
+
+- **Grafana** — `http://localhost:3000`, bundled with the official ClickHouse datasource
+  and a starter dashboard ("CT Monitoring — Overview": ingest rate, unique certs/domains,
+  top root domains, top issuers, open-gap count), all auto-provisioned. Anonymous viewing
+  is on; log in as `admin` / `CLICKHOUSE_PASSWORD` to edit. (Some all-time aggregation
+  panels take ~10s on a large dataset; scope them to the time range to speed up.)
+- **Built-in ClickHouse UIs** (no setup) — `http://localhost:8123/play` (SQL console +
+  table results) and `http://localhost:8123/dashboard` (charts).
+
 ## Querying by domain
 
 See [`queries/examples.sql`](queries/examples.sql). The key idea: `domain_certs`

@@ -1,0 +1,120 @@
+{
+  "uid": "ct-overview",
+  "title": "CT Monitoring — Overview",
+  "tags": ["ct", "cert-monitoring"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Unique certificates",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "table",
+          "rawSql": "SELECT uniqExact(sha256) AS unique_certs FROM ct.certs"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Unique domains",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "table",
+          "rawSql": "SELECT uniqExact(domain) AS unique_domains FROM ct.domain_certs"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Open gaps (missing index ranges)",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "table",
+          "rawSql": "SELECT count() AS open_gaps FROM (SELECT source_url, cert_index, lagInFrame(cert_index) OVER w AS p FROM (SELECT source_url, cert_index FROM ct.cert_sightings GROUP BY source_url, cert_index) WINDOW w AS (PARTITION BY source_url ORDER BY cert_index ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)) WHERE p != 0 AND cert_index - p > 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Certificates ingested / minute",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15 } }, "overrides": [] },
+      "options": { "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "timeseries",
+          "rawSql": "SELECT toStartOfMinute(seen) AS time, count() AS certs FROM ct.certs WHERE $__timeFilter(seen) GROUP BY time ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Top root domains (by distinct certs)",
+      "gridPos": { "h": 11, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "table",
+          "rawSql": "SELECT cutToFirstSignificantSubdomain(domain) AS root_domain, uniqExact(sha256) AS certs, uniqExact(domain) AS names FROM ct.domain_certs GROUP BY root_domain ORDER BY certs DESC LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Top issuers",
+      "gridPos": { "h": 11, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-ct" },
+          "editorType": "sql",
+          "queryType": "table",
+          "rawSql": "SELECT issuer_o AS issuer, count() AS certs FROM ct.certs WHERE issuer_o != '' GROUP BY issuer ORDER BY certs DESC LIMIT 20"
+        }
+      ]
+    }
+  ]
+}
