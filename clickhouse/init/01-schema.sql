@@ -25,15 +25,15 @@ CREATE TABLE IF NOT EXISTS ct.certs
     not_before          DateTime             CODEC(Delta, ZSTD(1)),
     not_after           DateTime             CODEC(Delta, ZSTD(1)),
     all_domains         Array(String)        CODEC(ZSTD(1)),
-    subject_cn          String               CODEC(ZSTD(1)),
+    subject_cn          String               CODEC(ZSTD(1)),  -- high cardinality (a domain)
     subject_o           LowCardinality(String),
-    issuer_cn           String               CODEC(ZSTD(1)),
+    issuer_cn           LowCardinality(String),                -- ~hundreds of intermediates
     issuer_o            LowCardinality(String),
     signature_algorithm LowCardinality(String),
     is_ca               UInt8,
     update_type         LowCardinality(String),   -- X509LogEntry | PrecertLogEntry
     source_name         LowCardinality(String),
-    source_url          String               CODEC(ZSTD(1)),
+    source_url          LowCardinality(String),   -- ~50 CT log URLs
     source_type         LowCardinality(String),   -- rfc6962 | tiled
     cert_index          UInt64               CODEC(ZSTD(1)),
     -- ~10x speedup for has(all_domains, 'x') exact lookups (Altinity-tested
