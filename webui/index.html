@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Domain issuance lookup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:#FAFAF7; --surface:#FFFFFF; --ink:#15201B; --muted:#6A7268;
+    --line:#E2E4DD; --line-strong:#CDD0C7; --seal:#0F6B47; --seal-soft:#E7F1EC;
+    --amber:#9A6A12; --rust:#A12A1F;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink); font-family:var(--body);
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:880px; margin:0 auto; padding:48px 24px 96px; }
+
+  .eyebrow {
+    font-family:var(--disp); font-size:11.5px; font-weight:600; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 10px;
+  }
+  h1 { font-family:var(--disp); font-weight:600; font-size:30px; letter-spacing:-.01em; margin:0 0 6px; }
+  .lede { color:var(--muted); margin:0 0 30px; font-size:15px; max-width:52ch; }
+
+  /* search */
+  form { display:flex; flex-wrap:wrap; gap:10px; align-items:stretch; margin-bottom:14px; }
+  .field { position:relative; flex:1 1 320px; }
+  .field input {
+    width:100%; height:52px; padding:0 16px; font-family:var(--mono); font-size:17px;
+    color:var(--ink); background:var(--surface); border:1px solid var(--line-strong);
+    border-radius:8px; outline:none;
+  }
+  .field input::placeholder { color:#A7ABA1; }
+  .field input:focus { border-color:var(--seal); box-shadow:0 0 0 3px var(--seal-soft); }
+  button {
+    height:52px; padding:0 22px; font-family:var(--disp); font-weight:600; font-size:15px;
+    color:#fff; background:var(--seal); border:0; border-radius:8px; cursor:pointer;
+    letter-spacing:.01em;
+  }
+  button:hover { background:#0B5638; }
+  button:focus-visible { outline:3px solid var(--seal-soft); outline-offset:2px; }
+  .opt {
+    display:inline-flex; align-items:center; gap:8px; font-size:14px; color:var(--muted);
+    user-select:none; cursor:pointer; margin-bottom:34px;
+  }
+  .opt input { width:16px; height:16px; accent-color:var(--seal); cursor:pointer; }
+
+  /* states */
+  .state { color:var(--muted); font-size:15px; padding:8px 0; }
+  .state.err { color:var(--rust); }
+  [hidden] { display:none !important; }
+
+  /* dossier header */
+  .dossier { border-top:2px solid var(--ink); padding-top:18px; margin-bottom:26px;
+    animation:rise .3s ease both; }
+  .dossier .target {
+    font-family:var(--mono); font-weight:500; font-size:clamp(20px,4vw,30px);
+    word-break:break-all; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+  }
+  .chip {
+    font-family:var(--disp); font-size:11px; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--seal); background:var(--seal-soft);
+    padding:4px 9px; border-radius:999px; white-space:nowrap;
+  }
+
+  /* stat tiles */
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; margin:22px 0 34px; }
+  .tile { background:var(--surface); padding:16px 18px; }
+  .tile .k { font-family:var(--disp); font-size:11px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .tile .v { font-family:var(--mono); font-size:24px; font-weight:500; }
+  .tile .v.sub { font-size:15px; }
+  .tile.accent .v { color:var(--seal); }
+
+  /* section heading */
+  h2 { font-family:var(--disp); font-size:12px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 14px;
+    padding-bottom:8px; border-bottom:1px solid var(--line); }
+
+  /* issuers */
+  .issuers { margin-bottom:38px; }
+  .iss { display:grid; grid-template-columns:1fr 56px; align-items:center; gap:12px;
+    padding:7px 0; }
+  .iss .name { font-family:var(--mono); font-size:14px; }
+  .iss .bar { grid-column:1 / -1; height:5px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .iss .bar i { display:block; height:100%; background:var(--seal); border-radius:3px; }
+  .iss .n { font-family:var(--mono); font-size:13px; color:var(--muted); text-align:right; }
+
+  /* recent */
+  .rec { display:flex; flex-direction:column; gap:1px; background:var(--line);
+    border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .row { background:var(--surface); padding:13px 16px; display:grid;
+    grid-template-columns:1fr 200px; gap:8px 20px; align-items:center; }
+  .row .d { font-family:var(--mono); font-size:14px; word-break:break-all; }
+  .row .meta { font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .life { min-width:0; }
+  .life .track { height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .life .track i { display:block; height:100%; border-radius:3px; }
+  .life .lbl { display:flex; justify-content:space-between; gap:8px; margin-top:5px;
+    font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .status { font-weight:700; }
+  .s-active{ color:var(--seal);} .s-expiring{ color:var(--amber);} .s-expired{ color:var(--rust);} .s-pending{color:var(--muted);}
+  .fill-active{ background:var(--seal);} .fill-expiring{ background:var(--amber);} .fill-expired{ background:var(--rust);} .fill-pending{background:var(--line-strong);}
+
+  footer { margin-top:40px; padding-top:18px; border-top:1px solid var(--line);
+    font-size:12.5px; color:var(--muted); }
+  footer code { font-family:var(--mono); }
+
+  @keyframes rise { from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
+  @media (prefers-reduced-motion:reduce){ .dossier{ animation:none; } }
+  @media (max-width:560px){ .row{ grid-template-columns:1fr; } .life{ margin-top:4px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Certificate Transparency</p>
+  <h1>Domain issuance lookup</h1>
+  <p class="lede">Search every certificate logged for a domain. Tick the box to include all subdomains under it.</p>
+
+  <form id="f" autocomplete="off">
+    <label class="field">
+      <input id="domain" name="domain" type="text" placeholder="example.com"
+             spellcheck="false" autocapitalize="off" aria-label="Domain">
+    </label>
+    <button type="submit">Look up</button>
+  </form>
+  <label class="opt"><input id="sub" type="checkbox"> Include subdomains</label>
+
+  <div id="state" class="state">Enter a domain to see what's been issued for it.</div>
+
+  <section id="out" hidden>
+    <div class="dossier">
+      <div class="target"><span id="t-domain"></span><span id="t-chip" class="chip"></span></div>
+    </div>
+
+    <div class="tiles">
+      <div class="tile accent"><div class="k">Certificates</div><div class="v" id="t-certs"></div></div>
+      <div class="tile"><div class="k">Active now</div><div class="v" id="t-active"></div></div>
+      <div class="tile"><div class="k" id="t-domlabel">Domains</div><div class="v" id="t-domains"></div></div>
+      <div class="tile"><div class="k">First seen</div><div class="v sub" id="t-first"></div></div>
+      <div class="tile"><div class="k">Last seen</div><div class="v sub" id="t-last"></div></div>
+    </div>
+
+    <div class="issuers">
+      <h2>Issuers</h2>
+      <div id="t-issuers"></div>
+    </div>
+
+    <div>
+      <h2>Recent certificates</h2>
+      <div class="rec" id="t-recent"></div>
+    </div>
+  </section>
+
+  <footer>Data from the live Certificate Transparency feed. Dashboards in <code>Grafana :3000</code>; raw SQL at <code>:8123/play</code>.</footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const DAY = 86400;
+const nf = new Intl.NumberFormat('en-US');
+
+function fmtDate(u){ if(!u) return '—'; const d=new Date(u*1000);
+  return d.toISOString().slice(0,10); }
+function fmtWhen(u){ if(!u) return '—'; const d=new Date(u*1000);
+  return d.toISOString().slice(0,16).replace('T',' ')+' UTC'; }
+
+function lifetime(nb, na){
+  const now = Date.now()/1000;
+  if(na<=nb) return {cls:'pending', frac:0, label:'—'};
+  if(now < nb) return {cls:'pending', frac:0, label:'not yet valid'};
+  if(now > na) return {cls:'expired', frac:1, label:'expired'};
+  const frac = (now-nb)/(na-nb);
+  const left = Math.round((na-now)/DAY);
+  if(na-now < 30*DAY) return {cls:'expiring', frac, label:'expires in '+left+'d'};
+  return {cls:'active', frac, label:left+'d left'};
+}
+
+async function lookup(e){
+  if(e) e.preventDefault();
+  const domain = $('#domain').value.trim();
+  if(!domain) return;
+  const subs = $('#sub').checked;
+  const state = $('#state'), out = $('#out');
+  out.hidden = true;
+  state.hidden = false; state.className='state'; state.textContent='Looking up '+domain+'…';
+
+  let r;
+  try {
+    r = await fetch('/api/lookup?domain='+encodeURIComponent(domain)+'&subdomains='+subs).then(x=>x.json());
+  } catch(err){ state.className='state err'; state.textContent='Request failed. Is the service up?'; return; }
+
+  if(r.error){ state.className='state err'; state.textContent=r.error; return; }
+  if(!r.found){ state.className='state'; state.textContent='No certificates found for '+r.domain+(subs?' or its subdomains':'')+'.'; return; }
+
+  state.hidden = true; out.hidden = false;
+
+  $('#t-domain').textContent = r.domain;
+  $('#t-chip').textContent = r.subdomains ? '+ subdomains' : 'exact';
+  $('#t-certs').textContent = nf.format(r.certs);
+  $('#t-active').textContent = nf.format(r.active);
+  $('#t-domains').textContent = nf.format(r.domains);
+  $('#t-domlabel').textContent = r.subdomains ? 'Distinct names' : 'Names';
+  $('#t-first').textContent = fmtDate(r.first_seen);
+  $('#t-last').textContent = fmtDate(r.last_seen);
+
+  const max = (r.issuers[0]?.certs)||1;
+  $('#t-issuers').innerHTML = r.issuers.map(i=>`
+    <div class="iss">
+      <span class="name">${esc(i.name)}</span>
+      <span class="n">${nf.format(i.certs)}</span>
+      <span class="bar"><i style="width:${Math.max(2,100*i.certs/max)}%"></i></span>
+    </div>`).join('') || '<div class="state">No named issuers.</div>';
+
+  $('#t-recent').innerHTML = r.recent.map(c=>{
+    const lt = lifetime(c.not_before, c.not_after);
+    return `<div class="row">
+      <div>
+        <div class="d">${esc(c.domain)}</div>
+        <div class="meta">${esc(c.issuer||'—')} · seen ${fmtWhen(c.seen)}</div>
+      </div>
+      <div class="life">
+        <div class="track"><i class="fill-${lt.cls}" style="width:${Math.round(lt.frac*100)}%"></i></div>
+        <div class="lbl"><span>${fmtDate(c.not_before)} → ${fmtDate(c.not_after)}</span><span class="status s-${lt.cls}">${lt.label}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+$('#f').addEventListener('submit', lookup);
+$('#sub').addEventListener('change', ()=>{ if(!$('#out').hidden) lookup(); });
+$('#domain').focus();
+</script>
+</body>
+</html>

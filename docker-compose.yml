@@ -99,6 +99,24 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
 
+  # Minimal domain-lookup web UI: enter a domain (optionally + subdomains) and
+  # get certificate stats. http://localhost:8088
+  webui:
+    build: ./webui
+    restart: always
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ct}
+      LISTEN_ADDR: ":8088"
+    ports:
+      - "127.0.0.1:8088:8088"
+
 volumes:
   clickhouse-data:
   certstream-state:

@@ -51,6 +51,10 @@ docker compose logs -f monitor
 
 ## Web UI
 
+- **Domain lookup** — `http://localhost:8088`, a small Go service: enter a domain (with an
+  "include subdomains" toggle) and get certificate stats — counts, active certs, distinct
+  names, issuers, and recent certificates with their validity windows. The query path is
+  `GET /api/lookup?domain=<d>&subdomains=<bool>`.
 - **Grafana** — `http://localhost:3000`, bundled with the official ClickHouse datasource
   and a starter dashboard ("CT Monitoring — Overview": ingest rate, unique certs/domains,
   top root domains, top issuers, open-gap count), all auto-provisioned. Anonymous viewing
